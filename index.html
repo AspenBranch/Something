@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<!-- Program exported to HTML using the KA Project Exporter by @MushyAvocado 
+https://www.khanacademy.org/computer-programming/ka-project-exporter/5195486791385088
+-->
+	
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<title>Marmalade Trench</title>
+	<style>
+		
+		
+		/* Change the color as you want */
+		:root {
+			--background-color: #000000;
+		}
+		
+		
+		html, body, #wrapper {
+			overflow: hidden;
+			width: 100%;
+		    height: 100%;
+			margin: 0px;
+			padding: 0px;
+		    width: calc(100% + 1px);
+		}
+		
+		body {
+		    background-color: var(--background-color);
+		}
+		
+		
+		canvas {
+			width: fit-content;
+			height: fit-content;
+		}
+		
+		canvas:focus {
+			outline: none;
+		}
+		
+		/* Automatically fits to the remaining height and centers the canvas it contains */
+		#wrapper {
+			padding: 0px;
+			margin: 0px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			width: 100%;
+		}
+		
+</style>
+</head>
+<body id="wrapper">
+    <!-- Canvases with a class of "sketch" are applied to the program in the order importPJS() is called. -->
+    <canvas class="sketch"></canvas>
+	<!-- Load the PJS library -->
+	<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/Khan/processing-js@master/processing.js"></script>
+	<!-- The exporter script must be loaded before the program script -->
+	<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/Mushy-Avocado/KA-exporter@main/exporter.js"></script>
+	<!-- Run Khan Academy program and import PJS -->
+	<script type="application/javascript">
+		
+		
+		function program() {
+		    
+		    title("Marmalade Trench");
+		    size(600, 600);
+		    
+		    // All code goes here
+			
+			
+			smooth();
+			frameRate(60);
+			var mono = createFont("menlo");
+			mono.css = "normal normal normal 20px/27px \"menlo\", \"monaco\", monspace";
+			textFont(mono);
+			
+			
+			var colors = [
+			    [color(250, 185, 87), color(235, 109, 77), ],
+			    [color(240, 230, 115), color(100, 156, 72), ],
+			    [color(57, 237, 165), color(0, 130, 156), ],
+			    [color(230, 124, 167), color(151, 110, 204), ],
+			    [color(223, 240, 225), color(102, 96, 70), ],
+			];
+			var names = [
+			    "marmalade",
+			    "dandelion",
+			    "cerulean",
+			    "periwinkle",
+			    "spectral",
+			];
+			
+			var playing = false;
+			
+			var c1, c2, realC1, realC2;
+			var clr = 0, cSmooth = 0, cWait = 0;
+			    realC1 = c1 = colors[0][0];
+			    realC2 = c2 = colors[0][1];
+			
+			var p = [];
+			var y = 20, x = 0, py = 0, vx = 0;
+			var speed = 2, count = 0, easeIn = 0;
+			var delta = 1, dMult = 1000/60, ms = millis();
+			var score = 0, load  = 0;
+			
+			mouseY = 357;
+			var s = min(width, height)/400;
+			
+			// vignette overlay image
+			var img = (function() {
+			    background(255, 0);
+			    stroke(0, 1);
+			    noFill();
+			    strokeWeight(200);
+			    for(var i = 30; i < 200; i += (230 - i)/20) {
+			        ellipse(200, 200, i + 550, i + 550);
+			    }
+			    return get();
+			})();
+			
+			// speed lines around  the corners
+			function speed_lines(r, b, y, s) {
+			    s = s > 2 ? s : 2;
+			    beginShape();
+			    
+			    for(var i = 0; i <= 360; i += random(s*0.9, s*1.1)) {
+			        var rand = (y/2) + -noise(frameCount/4, i/10)*y;
+			        vertex(200 + sin(i)*r, 200 + cos(i)*r);
+			        vertex(200 + sin(i + s*0.1)*((r - b) + rand), 200 + cos(i + s*0.1)*((r - b) + rand));
+			        vertex(200 + sin(i + s*0.2)*r, 200 + cos(i + s*0.2)*r);
+			    }
+			    for(var i = 360; i >= 0; i -= 45) {
+			        vertex(200 + sin(i)*r*1.2, 200 + cos(i)*r*1.2);
+			    }
+			    endShape();
+			}
+			function new_p(px, py, h) {
+			    p.unshift({
+			        x: px + sin(count*5)*50,
+			        y: y + py,
+			        z: load,
+			        
+			        w: 50,
+			        h: h,
+			    });
+			}
+			function overlap(b, px, py, pw, ph) {
+			    return b.x + b.w > px && b.x < px + pw && b.z + 3 > py && b.z < py + ph;
+			}
+			function draw_pillars() {
+			    var stop = false, n;
+			    for(var i = 0; i < p.length; i++) {
+			        
+			        // calulate perspective
+			        n = 100/p[i].z;
+			        
+			        if((p[i].x + x + p[i].w)*n > -200 && (p[i].x  + x)*n < 200) {
+			          fill(lerpColor(c1, c2, constrain((n*1.4 - 0.7)*0.3, 0, 1)), 255);
+			          rect((p[i].x + x)*n + vx*p[i].z*0.05, (p[i].y + py)*n - p[i].h*n, p[i].w*n, p[i].h*n);
+			        }
+			        
+			        // pillars actually move towards the camera
+			        p[i].z -= speed*delta;
+			        
+			        // check for collisions, or if the pillar is off screen and can be removed
+			        if(p[i].h > 100 && overlap(p[i], -x - 3, 6, 6, speed)) {
+			            stop = true;
+			        } else if(p[i].z < 0 && p.height !== 300 || (p[i].y + py - p[i].h)*n > 105 || (p[i].x + x + p[i].w)*n < -350 || (p[i].x  + x)*n > 350) {
+			            p.splice(i, 1);
+			            i--;
+			        }
+			    }
+			    
+			    // on collision, freeze motion
+			    if(stop) {
+			        speed = 0;
+			    }
+			}
+			function mouseClicked() {
+			    if(speed === 0) {
+			        realC1 = c1;
+			        realC2 = c2;
+			        
+			        clr = x = vx = load = cSmooth = cWait = count = easeIn = score = 0;
+			        playing = true;
+			        speed = 2;
+			        p = [];
+			    } else if(!playing && speed === 2) {
+			        playing = true;
+			    }
+			}
+			function keyPressed() {
+			    if(keyCode === 8) {
+			        noLoop();
+			        draw = function() {};
+			        resetMatrix();
+			        scale(s);
+			        fill(255);
+			        textFont(mono, 30);
+			        text(names[~~(clr - 0.8 + cSmooth)] + " trench", 200, 200);
+			        rect(50, 218, 300, 3);
+			        textFont(mono, 20);
+			        text("click to play", 200, 237);
+			    }
+			}
+			function draw() {
+			    
+			    if(s !== 1) {
+			      scale(s);
+			    }
+			    noStroke();
+			    background(c1);
+			    
+			    // calculate delta time to keep speed consistent over framerate
+			    delta = lerp(delta, (millis() - ms)/dMult, 0.1);
+			    ms = millis();
+			    
+			    // game logic [
+			        if(speed > 0) {
+			            // update height above ground
+			            py = lerp(py, -(mouseY/s - 300)*0.15 + 5, 0.1*delta);
+			            
+			            // update colors
+			            cSmooth = min(cSmooth + (clr === 0 ? 0.025 : 0.005), 1);
+			            c1 = lerpColor(realC1, colors[clr][0], cSmooth);
+			            c2 = lerpColor(realC2, colors[clr][1], cSmooth);
+			            
+			            if(playing) {
+			                
+			                // set color fader to next color
+			                cWait += delta;
+			                if(cWait > 1200 && clr < colors.length - 1) {
+			                    cSmooth = 0;
+			                    realC1 = colors[clr][0];
+			                    realC2 = colors[clr][1];
+			                    clr++;
+			                    cWait = 0;
+			                    speed += 0.3;
+			                }
+			                
+			                // player movement
+			                vx = sin((200 - mouseX/s)*0.5)*pow(4, delta)*easeIn;
+			                x = constrain(x + vx, -225 + sin(count*5)*50, 225 + sin(count*5)*50);
+			                count += 0.5*delta;
+			                
+			                if(load >= 200) {
+			                    // add random tall pillars
+			                    if(~~count % ~~((14 - ~~((speed*3)))/delta) === 0) {
+			                        new_p(random(-250, 200), 100, 300);
+			                    }
+			                    
+			                    easeIn = lerp(easeIn, 1, 0.1);
+			                    score += delta*0.2;
+			                }
+			            }
+			            
+			            // create walls and floor [
+			                if(random() < speed*0.1*delta || ~~count*delta % 5 === 0) {
+			                    new_p(-250 + random(-5, 5), random(100, 120), 200);
+			                    new_p(200 + random(-5, 5), random(100, 120), 200);
+			                }
+			                for(var i = 0; i < 1*speed*delta; i++) {
+			                    var px = random(-250, 200);
+			                    new_p(px, 100 + (noise(count*0.01, px*0.01) < 0.5 ? 10 : 0), 100);
+			                }
+			            // ]
+			            
+			            if(load < 200) {
+			                load = min(load + speed, 200);
+			            }
+			        }
+			    // ]
+			    // draw pillars [
+			        pushMatrix();
+			        translate(200 + random(-speed*0.5, speed*0.5), 300 + random(-speed*0.5, speed*0.5));
+			        rotate(vx);
+			            draw_pillars();
+			        popMatrix();
+			    // ]
+			    // overlay effects [
+			    image(img, 0, 0);
+			    if(speed > 0) {
+			        fill(0, 10);
+			        speed_lines(284, 75, 451, 8);
+			    }
+			    // ]
+			    // menu text [
+			        fill(255, load);
+			        textAlign(3, 3);
+			        if(speed === 0) {
+			            textFont(mono, 30);
+			            text(names[~~(clr - 0.8 + cSmooth)] + " trench", 200, 200);
+			            rect(50, 218, 300, 3);
+			            textFont(mono, 16);
+			            text("play terminated.\nscore: " + ~~score, 200, 249);
+			            fill(255, 150);
+			            text("click to replay.", 200, 360);
+			        } else {
+			            fill(255, min(load, 200*(1 - easeIn)));
+			            textFont(mono, 30);
+			            text("marmalade trench", 200, 200);
+			            rect(50, 218, 300, 3);
+			            textFont(mono, 16);
+			            text("mouse to move.", 200, 237);
+			            if(!playing) {
+			                fill(255, min(load, 150*(1 - easeIn)));
+			                text("click to play.", 200, 360);
+			            }
+			        }
+			    // ]
+			    resetMatrix();
+			}
+			
+		}
+		
+		runPJS(program);
+		
+		// Add reload button on KA --> <script>
+		
+	</script>
+</body>
+
+</html>
